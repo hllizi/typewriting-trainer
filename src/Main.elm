@@ -2,7 +2,7 @@ module Main exposing (..)
 
 import Browser
 import Browser.Events exposing (onKeyPress)
-import Html exposing (Html, Attribute, button, div, h1, text)
+import Html exposing (Html, Attribute, button, div, h1, text, br)
 import Html.Attributes exposing (style)
 import Html.Events exposing (onClick)
 import Random
@@ -18,32 +18,48 @@ main = Browser.element {
     subscriptions = subscriptions, 
     view = view}
 
-type Msg = Change | CorrectKeyPressed Char | IncorrectKeyPressed | NewChar Char | SetLastUpdateTime Time.Posix | Pass
+type Msg = 
+      Change 
+    | CorrectKeyPressed Char 
+    | IncorrectKeyPressed 
+    | NewChar Char 
+    | SetLastUpdateTime Time.Posix 
+    | Pass
+    | TimedChange
+
 type alias Model = 
     {
         interval: Int,
         subIntervalLength: Int,
         character: Char,
         mistakeMade: Bool,
+        mistakeCount: Int,
+        successCount: Int,
         lastUpdateTime: Time.Posix
         }
 
 init : () -> (Model, Cmd Msg)
-init _ = (Model 1000 100 'A' False (millisToPosix 0), readTime)
+init _ = (Model 1000 100 'A' False 0 0 (millisToPosix 0), readTime)
 
 timedChange : Int -> Time.Posix -> Time.Posix -> Msg
 timedChange factor last now = 
     if Time.posixToMillis last < Time.posixToMillis now - (factor * 100)  
     then 
-        Change
+        TimedChange 
     else
         Pass
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model = 
     case msg of 
-        CorrectKeyPressed _ -> update Change model
-        IncorrectKeyPressed -> ({model | mistakeMade = True }, Cmd.none)
+        CorrectKeyPressed _ -> 
+            update Change { model | successCount = model.successCount +1}
+        IncorrectKeyPressed -> 
+            ({model | 
+                mistakeMade = True, 
+                mistakeCount = model.mistakeCount + 1 }, 
+                Cmd.none
+                )
         Change ->
                     (
                         {model | mistakeMade = False}, 
@@ -55,6 +71,8 @@ update msg model =
                             (Char.toCode 'z')),
                             readTime]
                             )
+        TimedChange -> 
+            update Change {model | mistakeCount = model.mistakeCount + 1}
         SetLastUpdateTime time -> ({model | lastUpdateTime = time}, Cmd.none)
         NewChar c -> ({model | character = c}, Cmd.none)
         Pass -> (model, Cmd.none)
@@ -77,8 +95,10 @@ toMaybeChar string =
 setCharacter: Maybe Char -> Msg
 setCharacter maybeC =
     case maybeC of
-        Just c -> CorrectKeyPressed c
-        _ -> IncorrectKeyPressed
+        Just c ->
+            CorrectKeyPressed c
+        _ ->
+            IncorrectKeyPressed
 
 checkCharacter: Model -> Maybe Char -> Msg
 checkCharacter model maybeC =
@@ -100,7 +120,11 @@ coloring mistakeMade =
 view: Model -> Html Msg
 view model = 
     div []
-    [ h1 (coloring model.mistakeMade) [ text  (String.fromChar model.character ) ] ]
+    [ 
+        text ("Fehler: " ++ (String.fromInt model.mistakeCount)),
+        br [] [], 
+        text ("Richtig: " ++ (String.fromInt model.successCount)),
+        h1 (coloring model.mistakeMade) [ text  (String.fromChar model.character ) ] ]
 
 
 
