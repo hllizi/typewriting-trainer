@@ -20,8 +20,9 @@ main = Browser.element {
 
 type Msg = 
       Change 
-    | CorrectKeyPressed Char 
+    | CorrectKeyPressed
     | IncorrectKeyPressed 
+    | ResetCorrectnessMarking
     | NewChar Char 
     | SetLastUpdateTime Time.Posix 
     | Pass
@@ -33,15 +34,16 @@ type alias Model =
         interval: Int,
         subIntervalLength: Int,
         character: Char,
-        mistakeMade: Bool,
         mistakeCount: Int,
         successCount: Int,
         missedCount: Int,
-        lastUpdateTime: Time.Posix
+        lastUpdateTime: Time.Posix,
+        correctnessState: CorrectnessState
         }
 
 type CharacterGroup = Upper | Middle | Lower | Numbers
 type alias Mode = List(CharacterGroup)
+type CorrectnessState = Correct | Incorrect | Neutral
 
 letters: List(Char)
 letters = 
@@ -85,19 +87,19 @@ characterList mode =
     []
     mode
 
---randomCharacter: Mode -> 
-randomCharacter mode =
+--setToRandomCharacter: Mode -> 
+setToRandomCharacter mode =
     let characters = characterList mode
         length = List.length characters
     in
         Random.generate 
-               (NewChar << fromJustWithAlternative 'a' << (\i -> elementAt i characters)) 
+               (NewChar << Maybe.withDefault 'a' << (\i -> elementAt i characters)) 
                (Random.int 
                0 
                (length - 1))
 
 init : () -> (Model, Cmd Msg)
-init _ = (Model [Middle] 1000 100 'A' False 0 0 0 (millisToPosix 0), readTime)
+init _ = (Model [Middle] 1000 100 'A' 0 0 0 (millisToPosix 0) Neutral, readTime)
 
 timedChange : Int -> Time.Posix -> Time.Posix -> Msg
 timedChange factor last now = 
@@ -110,19 +112,26 @@ timedChange factor last now =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model = 
     case msg of 
-        CorrectKeyPressed _ -> 
-            update Change { model | successCount = model.successCount +1}
+        CorrectKeyPressed -> 
+            if model.correctnessState == Correct 
+                then 
+                    (model, Cmd.none)
+                else 
+                    ({model | successCount = model.successCount + 1, correctnessState = Correct}, Cmd.none)
         IncorrectKeyPressed -> 
             ({model | 
-                mistakeMade = True, 
+                correctnessState = Incorrect, 
                 mistakeCount = model.mistakeCount + 1 }, 
                 Cmd.none
                 )
+        ResetCorrectnessMarking -> if model.correctnessState == Correct 
+         then  update Change model
+         else (model, Cmd.none)
         Change ->
             (
-                {model | mistakeMade = False}, 
+                {model | correctnessState = Neutral}, 
                 Cmd.batch [ 
-                    randomCharacter model.mode,
+                    setToRandomCharacter model.mode,
                     readTime]
                     )
         TimedChange -> 
@@ -137,7 +146,8 @@ subscriptions model = Sub.batch [
     in
     Time.every (toFloat model.subIntervalLength) (timedChange subIntervalNumber model.lastUpdateTime)
     ,
-    onKeyPress (map (checkCharacter model << toMaybeChar) <| field "key" string)
+    Time.every 100 (\_ -> ResetCorrectnessMarking),
+    onKeyPress (map (checkCharacterCorrectness model << toMaybeChar) <| field "key" string)
     ]
 
 toMaybeChar: String -> Maybe Char
@@ -146,30 +156,26 @@ toMaybeChar string =
         Just (c, "") -> Just c
         _ -> Nothing 
 
-setCharacter: Maybe Char -> Msg
-setCharacter maybeC =
-    case maybeC of
-        Just c ->
-            CorrectKeyPressed c
-        _ ->
-            IncorrectKeyPressed
-
-checkCharacter: Model -> Maybe Char -> Msg
-checkCharacter model maybeC =
+checkCharacterCorrectness: Model -> Maybe Char -> Msg
+checkCharacterCorrectness model maybeC =
     if(maybeC == Just model.character) 
     then
-        CorrectKeyPressed model.character 
+        CorrectKeyPressed
     else
         IncorrectKeyPressed
 
 readTime: Cmd Msg
 readTime = perform SetLastUpdateTime Time.now 
 
-coloring: Bool -> List(Attribute msg)
-coloring mistakeMade = 
-    if mistakeMade 
-    then [style "color" "red"]
-    else []
+coloring: CorrectnessState -> List(Attribute msg)
+coloring correctnessState = 
+    let maybeColor = 
+            case correctnessState of
+                Correct -> Just "green"
+                Incorrect -> Just "red"
+                Neutral -> Nothing
+    in
+        Maybe.withDefault [] <| Maybe.map (\color -> [style "color" color]) maybeColor
 
 view: Model -> Html Msg
 view model = 
@@ -180,16 +186,11 @@ view model =
         text ("Richtig: " ++ (String.fromInt model.successCount)),
         br [] [], 
         text ("Verpaßt: " ++ (String.fromInt model.missedCount)),
-        h1 (coloring model.mistakeMade) [ text  (String.fromChar model.character ) ] ]
+        h1 (coloring model.correctnessState) [ text  (String.fromChar model.character ) ] ]
 
 elementAt: Int -> List(a) -> Maybe a
 elementAt index list =
     case list of
         x::xs -> if index == 0 then Just x else elementAt (index-1) xs 
         [] -> Nothing
-
-fromJustWithAlternative: a -> Maybe a -> a
-fromJustWithAlternative alt mbX  =
-    case mbX of
-        Just x -> x
-        Nothing -> alt 
+        
