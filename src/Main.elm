@@ -182,6 +182,7 @@ update msg model =
                         InduceRunning -> True
                         CountDown _-> True
                         StartTime _ -> True
+                        SetMode _ -> True
                         _ -> False
     in
     if not (model.running || initMessage)
@@ -226,7 +227,7 @@ update msg model =
 
             -- automatically update the character if it wasn't typed in in time
             SetMode mode ->
-                ( resetCounters { model | mode = mode }, Cmd.none )
+                (resetCounters { model | running = False, startTime = Nothing, mode = mode }, Cmd.none)
 
             InduceRunning ->
                 ( model , readTime StartTime )
@@ -262,9 +263,11 @@ resetCounters model =
 
 startLatency : Int
 startLatency =
-    2000
+    3000
 
 
+countDownFrom: Int
+countDownFrom = 3 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     let
@@ -282,7 +285,7 @@ subscriptions model =
                     if difference > startLatency && not model.running then
                         ToggleRunning
                     else
-                        CountDown <| (10 * (startLatency - difference)) // startLatency
+                        CountDown <| (countDownFrom + 1) * (startLatency - difference) // startLatency
                 _ -> Pass
                 )
         , Time.every 100 (\_ -> ResetCorrectnessMarking)
@@ -344,15 +347,17 @@ view model =
         , text ("Countdown: " ++ String.fromInt model.countDown)
         ]
 
+modeSelectRadioButton: String -> Html Msg
+modeSelectRadioButton mode = radioButton mode mode
 
 optionsForm : Model -> Html Msg
 optionsForm model =
     div []
-        [ radioButton "middle" "middle"
-        , radioButton "upper" "upper"
-        , radioButton "middle-upper" "middle-upper"
-        , radioButton "middle-upper-lower" "middle-upper-lower"
-        , radioButton "middle-upper-lower-numbers" "middle-upper-lower-numbers"
+        [ modeSelectRadioButton "middle"
+        , modeSelectRadioButton "upper"
+        , modeSelectRadioButton "middle-upper"
+        , modeSelectRadioButton "middle-upper-lower"
+        , modeSelectRadioButton "middle-upper-lower-numbers"
         , button
             [ onClick
                 (if model.running then
