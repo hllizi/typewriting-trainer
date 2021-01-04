@@ -334,42 +334,6 @@ coloring correctnessState =
     Maybe.withDefault [] <| Maybe.map (\color -> [ style "color" color ]) maybeColor
 
 
-view : Model -> Html Msg
-view model =
-    div []
-        [ text ("Fehler: " ++ String.fromInt model.mistakeCount)
-        , br [] []
-        , text ("Richtig: " ++ String.fromInt model.successCount)
-        , br [] []
-        , text ("Verpaßt: " ++ String.fromInt model.missedCount)
-        , h1 (coloring model.correctnessState) [ text (String.fromChar model.character) ]
-        , optionsForm model
-        , text ("Countdown: " ++ String.fromInt model.countDown)
-        ]
-
-modeSelectRadioButton: String -> Html Msg
-modeSelectRadioButton mode = radioButton mode mode
-
-optionsForm : Model -> Html Msg
-optionsForm model =
-    div []
-        [ modeSelectRadioButton "middle"
-        , modeSelectRadioButton "upper"
-        , modeSelectRadioButton "middle-upper"
-        , modeSelectRadioButton "middle-upper-lower"
-        , modeSelectRadioButton "middle-upper-lower-numbers"
-        , button
-            [ onClick
-                (if model.running then
-                    ToggleRunning
-
-                 else
-                    InduceRunning
-                )
-            ]
-            [ text "Start" ]
-        ]
-
 
 elementAt : Int -> List a -> Maybe a
 elementAt index list =
@@ -407,7 +371,64 @@ readMode s =
 
 --View Elements
 
+view : Model -> Html Msg
+view model =
+    div []
+        [ text ("Fehler: " ++ String.fromInt model.mistakeCount)
+        , br [] []
+        , text ("Richtig: " ++ String.fromInt model.successCount)
+        , br [] []
+        , text ("Verpaßt: " ++ String.fromInt model.missedCount)
+        , h1 (coloring model.correctnessState) [ text (String.fromChar model.character) ]
+        , optionsForm model
+        , text ("Countdown: " ++ String.fromInt model.countDown)
+        ]
 
-radioButton : String -> String -> Html Msg
-radioButton inputId inputValue =
-    input [ type_ "radio", id inputId, value inputValue, onInput (SetMode << readMode), name "mode" ] []
+modeSelectRadioButton: String -> Mode -> Html Msg
+modeSelectRadioButton mode activeMode = div [] [ 
+    radioButton mode mode <| extensionallyEqual (readMode mode) activeMode, 
+    label [for mode] [text mode],
+    br [] [] ]
+
+modeSelectButtons: Model -> Html Msg
+modeSelectButtons model =
+    div [] <| List.map (\modeString -> modeSelectRadioButton modeString model.mode) 
+    ["middle", "middle-upper", "middle-upper-lower", "middle-upper-lower-numbers"] 
+
+optionsForm : Model -> Html Msg
+optionsForm model =
+    div []
+        [ 
+            modeSelectButtons model
+            , button
+            [ onClick
+                (if model.running then
+                    ToggleRunning
+
+                 else
+                    InduceRunning
+                )
+            ]
+            [ text <| if model.running then "Stop" else "Start" ]
+        ]
+
+radioButton : String -> String -> Bool -> Html Msg
+radioButton inputId inputValue isChecked =
+    input [ 
+        type_ "radio", 
+        id inputId, 
+        value inputValue, 
+        onInput (SetMode << readMode), 
+        name "mode",
+        checked isChecked ] []
+
+-- Helpers
+extensionallyEqual: List(a) -> List(a) -> Bool
+extensionallyEqual l1 l2 =
+    case l1 of
+        [] -> l2 == []
+        x::xs -> 
+            let notEqualX = (\y -> x/=y)
+            in l2 /= [] && extensionallyEqual 
+                                (List.filter notEqualX xs) 
+                                (List.filter notEqualX l2)
