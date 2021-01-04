@@ -34,6 +34,7 @@ type Msg
     | InduceRunning
     | ToggleRunning
     | StartTime Time.Posix
+    | CountDown Int
 
 
 type alias Model =
@@ -48,6 +49,7 @@ type alias Model =
     , startTime : Maybe Time.Posix
     , correctnessState : CorrectnessState
     , running : Bool
+    , countDown: Int
     }
 
 
@@ -156,7 +158,7 @@ setToRandomCharacter mode =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model [ Middle ] 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False, readTime LastUpdateTime )
+    ( Model [ Middle ] 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
 
 
 timeDifference : Time.Posix -> Time.Posix -> Int
@@ -178,7 +180,8 @@ update msg model =
     let initMessage = case msg of
                         ToggleRunning -> True
                         InduceRunning -> True
-                        StartTime t -> True
+                        CountDown _-> True
+                        StartTime _ -> True
                         _ -> False
     in
     if not (model.running || initMessage)
@@ -229,9 +232,11 @@ update msg model =
                 ( model , readTime StartTime )
 
             ToggleRunning ->
-                ( { model | running = not model.running }, Cmd.none )
+                ( { model | running = not model.running, startTime = Nothing }, Cmd.none )
 
             -- Bureaucratic Messages
+            CountDown c ->
+                ( { model | countDown = c}, Cmd.none)
             NewChar c ->
                 ( { model | character = c }, Cmd.none )
 
@@ -268,14 +273,18 @@ subscriptions model =
     in
     Sub.batch
         [ Time.every (toFloat model.subIntervalLength) (timedChange subIntervalNumber model.lastUpdateTime)
-        , Time.every (toFloat model.subIntervalLength) 
-            (\now -> case model.startTime of
+        , Time.every 10
+            (\now -> 
+                case model.startTime of
                 Just startTime -> 
-                    if timeDifference now startTime > startLatency && not model.running then
+                    let difference = timeDifference now startTime 
+                    in
+                    if difference > startLatency && not model.running then
                         ToggleRunning
                     else
-                        Pass
-                _ -> Pass)
+                        CountDown <| (10 * (startLatency - difference)) // startLatency
+                _ -> Pass
+                )
         , Time.every 100 (\_ -> ResetCorrectnessMarking)
         , onKeyPress (Json.Decode.map (checkCharacterCorrectness model << toMaybeChar) <| field "key" string)
         ]
@@ -332,6 +341,7 @@ view model =
         , text ("Verpaßt: " ++ String.fromInt model.missedCount)
         , h1 (coloring model.correctnessState) [ text (String.fromChar model.character) ]
         , optionsForm model
+        , text ("Countdown: " ++ String.fromInt model.countDown)
         ]
 
 
