@@ -20,7 +20,6 @@ main =
         , view = view
         }
 
-
 type Msg
     = Change
     | CorrectKeyPressed
@@ -30,7 +29,7 @@ type Msg
     | LastUpdateTime Time.Posix
     | Pass
     | TimedChange
-    | SetMode Mode
+    | SetMode CharacterGroups
     | InduceRunning
     | ToggleRunning
     | StartTime Time.Posix
@@ -49,19 +48,49 @@ type alias Model =
     , startTime : Maybe Time.Posix
     , correctnessState : CorrectnessState
     , running : Bool
-    , countDown: Int
+    , countDown : Int
     }
 
 
 type CharacterGroup
-    = Upper
-    | Middle
-    | Lower
+    = UpperLetters
+    | MiddleLetters
+    | LowerLetters
     | Numbers
 
 
-type alias Mode =
+type alias CharacterGroups =
     List CharacterGroup
+
+
+type Mode
+    = Middle
+    | MiddleUpper
+    | UpperToLower
+    | LettersAndNumbers
+
+
+type alias ModeData = {
+    label: String,
+    id: String,
+    characterGroups: CharacterGroups
+    }
+
+
+modeToCharacterGroupList: Mode -> ModeData
+modeToCharacterGroupList mode =
+    case mode of
+        Middle ->
+            {characterGroups = [ MiddleLetters ], id = "middle", label = "middle"}
+
+        MiddleUpper ->
+            {characterGroups = [ MiddleLetters, UpperLetters ], id = "middle-upper", label = "middle-upper"}
+
+        UpperToLower ->
+            {characterGroups = [ MiddleLetters, UpperLetters, LowerLetters ], id = "middle-upper-lower", label = "middle-upper-lower"}
+
+        LettersAndNumbers ->
+            {characterGroups = [ MiddleLetters, UpperLetters, LowerLetters, Numbers ], id = "middle-upper-lower-numbers", label = "middle-upper-lower-numbers"}
 
 
 type CorrectnessState
@@ -118,19 +147,19 @@ capital =
     List.map Char.toUpper
 
 
-characterList : Mode -> List Char
+characterList : CharacterGroups -> List Char
 characterList mode =
     List.concat <|
         List.map
             (\group ->
                 case group of
-                    Upper ->
+                    UpperLetters ->
                         List.append upperRow upperRowUmlauts
 
-                    Middle ->
+                    MiddleLetters ->
                         List.append middleRow middleRowUmlauts
 
-                    Lower ->
+                    LowerLetters ->
                         lowerRow
 
                     Numbers ->
@@ -139,7 +168,7 @@ characterList mode =
             mode
 
 
-setToRandomCharacter: Mode -> Cmd Msg
+setToRandomCharacter : CharacterGroups -> Cmd Msg
 setToRandomCharacter mode =
     let
         characters =
@@ -158,7 +187,7 @@ setToRandomCharacter mode =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model [ Middle ] 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
+    ( Model [ MiddleLetters ] 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
 
 
 timeDifference : Time.Posix -> Time.Posix -> Int
@@ -177,17 +206,30 @@ timedChange factor last now =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let initMessage = case msg of
-                        ToggleRunning -> True
-                        InduceRunning -> True
-                        CountDown _-> True
-                        StartTime _ -> True
-                        SetMode _ -> True
-                        _ -> False
+    let
+        initMessage =
+            case msg of
+                ToggleRunning ->
+                    True
+
+                InduceRunning ->
+                    True
+
+                CountDown _ ->
+                    True
+
+                StartTime _ ->
+                    True
+
+                SetMode _ ->
+                    True
+
+                _ ->
+                    False
     in
-    if not (model.running || initMessage)
-    then
+    if not (model.running || initMessage) then
         ( model, Cmd.none )
+
     else
         case msg of
             CorrectKeyPressed ->
@@ -227,17 +269,18 @@ update msg model =
 
             -- automatically update the character if it wasn't typed in in time
             SetMode mode ->
-                (resetCounters { model | running = False, startTime = Nothing, mode = mode }, Cmd.none)
+                ( resetCounters { model | running = False, startTime = Nothing, mode = mode }, Cmd.none )
 
             InduceRunning ->
-                ( model , readTime StartTime )
+                ( model, readTime StartTime )
 
             ToggleRunning ->
                 ( { model | running = not model.running, startTime = Nothing }, Cmd.none )
 
             -- Bureaucratic Messages
             CountDown c ->
-                ( { model | countDown = c}, Cmd.none)
+                ( { model | countDown = c }, Cmd.none )
+
             NewChar c ->
                 ( { model | character = c }, Cmd.none )
 
@@ -249,7 +292,6 @@ update msg model =
 
             Pass ->
                 ( model, Cmd.none )
-
 
 
 resetCounters : Model -> Model
@@ -266,8 +308,11 @@ startLatency =
     3000
 
 
-countDownFrom: Int
-countDownFrom = 3 
+countDownFrom : Int
+countDownFrom =
+    3
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
     let
@@ -277,17 +322,22 @@ subscriptions model =
     Sub.batch
         [ Time.every (toFloat model.subIntervalLength) (timedChange subIntervalNumber model.lastUpdateTime)
         , Time.every 10
-            (\now -> 
+            (\now ->
                 case model.startTime of
-                Just startTime -> 
-                    let difference = timeDifference now startTime 
-                    in
-                    if difference > startLatency && not model.running then
-                        ToggleRunning
-                    else
-                        CountDown <| (countDownFrom + 1) * (startLatency - difference) // startLatency
-                _ -> Pass
-                )
+                    Just startTime ->
+                        let
+                            difference =
+                                timeDifference now startTime
+                        in
+                        if difference > startLatency && not model.running then
+                            ToggleRunning
+
+                        else
+                            CountDown <| (countDownFrom + 1) * (startLatency - difference) // startLatency
+
+                    _ ->
+                        Pass
+            )
         , Time.every 100 (\_ -> ResetCorrectnessMarking)
         , onKeyPress (Json.Decode.map (checkCharacterCorrectness model << toMaybeChar) <| field "key" string)
         ]
@@ -317,7 +367,7 @@ readTime makeMsg =
     perform makeMsg Time.now
 
 
-coloring : CorrectnessState -> List (Attribute msg)
+coloring : CorrectnessState -> List (Html.Attribute msg)
 coloring correctnessState =
     let
         maybeColor =
@@ -334,7 +384,6 @@ coloring correctnessState =
     Maybe.withDefault [] <| Maybe.map (\color -> [ style "color" color ]) maybeColor
 
 
-
 elementAt : Int -> List a -> Maybe a
 elementAt index list =
     case list of
@@ -349,58 +398,64 @@ elementAt index list =
             Nothing
 
 
-readMode : String -> Mode
+readMode : String -> CharacterGroups
 readMode s =
     case s of
         "middle" ->
-            [ Middle ]
+            [ MiddleLetters ]
 
         "middle-upper" ->
-            [ Middle, Upper ]
+            [ MiddleLetters, UpperLetters ]
 
         "middle-upper-lower" ->
-            [ Middle, Upper, Lower ]
+            [ MiddleLetters, UpperLetters, LowerLetters ]
 
         "middle-upper-lower-numbers" ->
-            [ Middle, Upper, Lower, Numbers ]
+            [ MiddleLetters, UpperLetters, LowerLetters, Numbers ]
 
         _ ->
-            [ Middle ]
+            [ MiddleLetters ]
 
 
 
 --View Elements
 
+
 view : Model -> Html Msg
 view model =
     div []
-        [ text ("Fehler: " ++ String.fromInt model.mistakeCount)
+        [ Html.text ("Fehler: " ++ String.fromInt model.mistakeCount)
         , br [] []
-        , text ("Richtig: " ++ String.fromInt model.successCount)
+        , Html.text ("Richtig: " ++ String.fromInt model.successCount)
         , br [] []
-        , text ("Verpaßt: " ++ String.fromInt model.missedCount)
-        , h1 (coloring model.correctnessState) [ text (String.fromChar model.character) ]
+        , Html.text ("Verpaßt: " ++ String.fromInt model.missedCount)
+        , h1 (coloring model.correctnessState) [ Html.text (String.fromChar model.character) ]
         , optionsForm model
-        , text ("Countdown: " ++ String.fromInt model.countDown)
+        , Html.text ("Countdown: " ++ String.fromInt model.countDown)
         ]
 
-modeSelectRadioButton: String -> Mode -> Html Msg
-modeSelectRadioButton mode activeMode = div [] [ 
-    radioButton mode mode <| extensionallyEqual (readMode mode) activeMode, 
-    label [for mode] [text mode],
-    br [] [] ]
 
-modeSelectButtons: Model -> Html Msg
+modeSelectRadioButton : String -> CharacterGroups -> Html Msg
+modeSelectRadioButton mode activeMode =
+    div [ ]
+        [ radioButton mode mode <| extensionallyEqual (readMode mode) activeMode
+        , label [ for mode ] [ Html.text mode ]
+        , br [] []
+        ]
+
+
+modeSelectButtons : Model -> Html Msg
 modeSelectButtons model =
-    div [] <| List.map (\modeString -> modeSelectRadioButton modeString model.mode) 
-    ["middle", "middle-upper", "middle-upper-lower", "middle-upper-lower-numbers"] 
+    div [] <|
+        List.map (\modeString -> modeSelectRadioButton modeString model.mode)
+            [ "middle", "middle-upper", "middle-upper-lower", "middle-upper-lower-numbers" ]
+
 
 optionsForm : Model -> Html Msg
 optionsForm model =
     div []
-        [ 
-            modeSelectButtons model
-            , button
+        [ modeSelectButtons model
+        , button
             [ onClick
                 (if model.running then
                     ToggleRunning
@@ -409,26 +464,46 @@ optionsForm model =
                     InduceRunning
                 )
             ]
-            [ text <| if model.running then "Stop" else "Start" ]
+            [ Html.text <|
+                if model.running then
+                    "Stop"
+
+                else
+                    "Start"
+            ]
         ]
+
 
 radioButton : String -> String -> Bool -> Html Msg
 radioButton inputId inputValue isChecked =
-    input [ 
-        type_ "radio", 
-        id inputId, 
-        value inputValue, 
-        onInput (SetMode << readMode), 
-        name "mode",
-        checked isChecked ] []
+    input
+        [ type_ "radio"
+        , id inputId
+        , value inputValue
+        , onInput (SetMode << readMode)
+        , name "mode"
+        , checked isChecked
+        ]
+        []
+
+
 
 -- Helpers
-extensionallyEqual: List(a) -> List(a) -> Bool
+
+
+extensionallyEqual : List a -> List a -> Bool
 extensionallyEqual l1 l2 =
     case l1 of
-        [] -> l2 == []
-        x::xs -> 
-            let notEqualX = (\y -> x/=y)
-            in l2 /= [] && extensionallyEqual 
-                                (List.filter notEqualX xs) 
-                                (List.filter notEqualX l2)
+        [] ->
+            l2 == []
+
+        x :: xs ->
+            let
+                notEqualX =
+                    \y -> x /= y
+            in
+            l2
+                /= []
+                && extensionallyEqual
+                    (List.filter notEqualX xs)
+                    (List.filter notEqualX l2)
