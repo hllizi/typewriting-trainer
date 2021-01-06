@@ -2,6 +2,11 @@ module Main exposing (..)
 
 import Browser
 import Browser.Events exposing (onKeyPress)
+import Element exposing (..)
+import Element.Background as Background
+import Element.Events as Ev
+import Element.Font as Font
+import Element.Input as Input
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
@@ -20,6 +25,7 @@ main =
         , view = view
         }
 
+
 type Msg
     = Change
     | CorrectKeyPressed
@@ -29,7 +35,7 @@ type Msg
     | LastUpdateTime Time.Posix
     | Pass
     | TimedChange
-    | SetMode CharacterGroups
+    | SetMode Mode
     | InduceRunning
     | ToggleRunning
     | StartTime Time.Posix
@@ -37,7 +43,7 @@ type Msg
 
 
 type alias Model =
-    { mode : List CharacterGroup
+    { mode : Mode
     , interval : Int
     , subIntervalLength : Int
     , character : Char
@@ -70,27 +76,27 @@ type Mode
     | LettersAndNumbers
 
 
-type alias ModeData = {
-    label: String,
-    id: String,
-    characterGroups: CharacterGroups
+type alias ModeData =
+    { label : String
+    , id : String
+    , characters : List Char
     }
 
 
-modeToCharacterGroupList: Mode -> ModeData
-modeToCharacterGroupList mode =
+modeToModeData : Mode -> ModeData
+modeToModeData mode =
     case mode of
         Middle ->
-            {characterGroups = [ MiddleLetters ], id = "middle", label = "middle"}
+            { characters = middleRow, id = "middle", label = "middle" }
 
         MiddleUpper ->
-            {characterGroups = [ MiddleLetters, UpperLetters ], id = "middle-upper", label = "middle-upper"}
+            { characters = List.concat [ middleRow, upperRow ], id = "middle-upper", label = "middle-upper" }
 
         UpperToLower ->
-            {characterGroups = [ MiddleLetters, UpperLetters, LowerLetters ], id = "middle-upper-lower", label = "middle-upper-lower"}
+            { characters = List.concat [ middleRow, upperRow, lowerRow ], id = "middle-upper-lower", label = "middle-upper-lower" }
 
         LettersAndNumbers ->
-            {characterGroups = [ MiddleLetters, UpperLetters, LowerLetters, Numbers ], id = "middle-upper-lower-numbers", label = "middle-upper-lower-numbers"}
+            { characters = List.concat [ middleRow, upperRow, lowerRow, numbers ], id = "middle-upper-lower-numbers", label = "middle-upper-lower-numbers" }
 
 
 type CorrectnessState
@@ -168,11 +174,11 @@ characterList mode =
             mode
 
 
-setToRandomCharacter : CharacterGroups -> Cmd Msg
+setToRandomCharacter : Mode -> Cmd Msg
 setToRandomCharacter mode =
     let
         characters =
-            characterList mode
+            (modeToModeData mode).characters
 
         length =
             List.length characters
@@ -187,7 +193,7 @@ setToRandomCharacter mode =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model [ MiddleLetters ] 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
+    ( Model Middle 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
 
 
 timeDifference : Time.Posix -> Time.Posix -> Int
@@ -367,21 +373,18 @@ readTime makeMsg =
     perform makeMsg Time.now
 
 
-coloring : CorrectnessState -> List (Html.Attribute msg)
+coloring : CorrectnessState -> List(Attr decorative msg)
 coloring correctnessState =
-    let
-        maybeColor =
-            case correctnessState of
-                Correct ->
-                    Just "green"
+    List.map Font.color 
+    (case correctnessState of
+        Correct ->
+            [ rgb255 0 255 0 ]
 
-                Incorrect ->
-                    Just "red"
+        Incorrect ->
+            [ rgb255 255 0 0 ]
 
-                Neutral ->
-                    Nothing
-    in
-    Maybe.withDefault [] <| Maybe.map (\color -> [ style "color" color ]) maybeColor
+        Neutral ->
+            [])
 
 
 elementAt : Int -> List a -> Maybe a
@@ -421,70 +424,81 @@ readMode s =
 --View Elements
 
 
+counter : String -> Int -> Element Msg
+counter name count =
+    el [] <|
+        Element.text <|
+            name
+                ++ String.fromInt count
+
+
+currentCharacter : Color -> Char -> Element Msg
+currentCharacter color char =
+    el [ Font.color color ] <|
+        Element.text <|
+            String.fromChar char
+
+
 view : Model -> Html Msg
 view model =
-    div []
-        [ Html.text ("Fehler: " ++ String.fromInt model.mistakeCount)
-        , br [] []
-        , Html.text ("Richtig: " ++ String.fromInt model.successCount)
-        , br [] []
-        , Html.text ("Verpaßt: " ++ String.fromInt model.missedCount)
-        , h1 (coloring model.correctnessState) [ Html.text (String.fromChar model.character) ]
-        , optionsForm model
-        , Html.text ("Countdown: " ++ String.fromInt model.countDown)
-        ]
+    layout [ Element.height fill ] <|
+        column []
+            [ column []
+                [ row []
+                    [ Element.text ("Fehler: " ++ String.fromInt model.mistakeCount)
+                    , Element.text ("Richtig: " ++ String.fromInt model.successCount)
+                    , Element.text ("Verpaßt: " ++ String.fromInt model.missedCount)
+                    ]
+                , row []
+                    [ el   
+                            (List.append 
+                            [ centerX, centerY, Font.size 100 ] 
+                            (coloring model.correctnessState)
+                            )
+                            (Element.text (String.fromChar model.character))
+                    ]
+                , Element.text ("Countdown: " ++ String.fromInt model.countDown)
+                ]
+            , el [] <| optionsForm model
+            ]
 
 
-modeSelectRadioButton : String -> CharacterGroups -> Html Msg
-modeSelectRadioButton mode activeMode =
-    div [ ]
-        [ radioButton mode mode <| extensionallyEqual (readMode mode) activeMode
-        , label [ for mode ] [ Html.text mode ]
-        , br [] []
-        ]
-
-
-modeSelectButtons : Model -> Html Msg
+modeSelectButtons : Model -> Element Msg
 modeSelectButtons model =
-    div [] <|
-        List.map (\modeString -> modeSelectRadioButton modeString model.mode)
-            [ "middle", "middle-upper", "middle-upper-lower", "middle-upper-lower-numbers" ]
+    el [] <|
+        Input.radio
+            []
+            { onChange = SetMode
+            , selected = Just model.mode
+            , label = Input.labelAbove [] (Element.text "Modus wählen:")
+            , options =
+                List.map (\mode -> Input.option mode (Element.text (modeToModeData mode).id))
+                    [ Middle, MiddleUpper, UpperToLower, LettersAndNumbers ]
+            }
 
 
-optionsForm : Model -> Html Msg
+optionsForm : Model -> Element Msg
 optionsForm model =
-    div []
+    column []
         [ modeSelectButtons model
-        , button
-            [ onClick
-                (if model.running then
-                    ToggleRunning
+        , Input.button []
+            { onPress =
+                Just
+                    (if model.running then
+                        ToggleRunning
 
-                 else
-                    InduceRunning
-                )
-            ]
-            [ Html.text <|
-                if model.running then
-                    "Stop"
+                     else
+                        InduceRunning
+                    )
+            , label =
+                Element.text <|
+                    if model.running then
+                        "Stop"
 
-                else
-                    "Start"
-            ]
+                    else
+                        "Start"
+            }
         ]
-
-
-radioButton : String -> String -> Bool -> Html Msg
-radioButton inputId inputValue isChecked =
-    input
-        [ type_ "radio"
-        , id inputId
-        , value inputValue
-        , onInput (SetMode << readMode)
-        , name "mode"
-        , checked isChecked
-        ]
-        []
 
 
 
