@@ -373,32 +373,19 @@ readTime makeMsg =
     perform makeMsg Time.now
 
 
-coloring : CorrectnessState -> List(Attr decorative msg)
+coloring : CorrectnessState -> List (Attr decorative msg)
 coloring correctnessState =
-    List.map Font.color 
-    (case correctnessState of
-        Correct ->
-            [ rgb255 0 255 0 ]
+    List.map Font.color
+        (case correctnessState of
+            Correct ->
+                [ rgb255 0 255 0 ]
 
-        Incorrect ->
-            [ rgb255 255 0 0 ]
+            Incorrect ->
+                [ rgb255 255 0 0 ]
 
-        Neutral ->
-            [])
-
-
-elementAt : Int -> List a -> Maybe a
-elementAt index list =
-    case list of
-        x :: xs ->
-            if index == 0 then
-                Just x
-
-            else
-                elementAt (index - 1) xs
-
-        [] ->
-            Nothing
+            Neutral ->
+                []
+        )
 
 
 readMode : String -> CharacterGroups
@@ -421,7 +408,7 @@ readMode s =
 
 
 
---View Elements
+--VIEW ELEMENTS
 
 
 counter : String -> Int -> Element Msg
@@ -438,28 +425,36 @@ currentCharacter color char =
         Element.text <|
             String.fromChar char
 
+textColorMain = (rgb255 200 200 200)
+
+counterDisplay: String -> Int -> Element Msg
+counterDisplay text counterValue = el 
+    [Font.color textColorMain] <|
+    Element.text (text ++ ": " ++ String.fromInt counterValue)
 
 view : Model -> Html Msg
 view model =
-    layout [ Element.height fill ] <|
-        column []
-            [ column []
-                [ row []
-                    [ Element.text ("Fehler: " ++ String.fromInt model.mistakeCount)
-                    , Element.text ("Richtig: " ++ String.fromInt model.successCount)
-                    , Element.text ("Verpaßt: " ++ String.fromInt model.missedCount)
+    layout [ Element.height fill] <|
+        row [Element.height fill, Element.width fill]
+            [ column [Element.height fill, Element.width <| fillPortion 20, Background.color (rgb255 0 0 100)]
+                [ row [Element.width fill]
+                    [ row [ Element.width fill ]  [counterDisplay "Fehler" model.mistakeCount]
+                    , row [ Element.width fill ]  [counterDisplay "Richtig" model.successCount]
+                    , row [ Element.width fill ]  [counterDisplay "Verpaßt" model.missedCount]
                     ]
-                , row []
-                    [ el   
-                            (List.append 
-                            [ centerX, centerY, Font.size 100 ] 
+                , row [Element.width fill, Element.height fill]
+                    [ el
+                        (List.append
+                            [ centerX, centerY, Font.size 200, Font.color (rgb 200 230 10) ]
                             (coloring model.correctnessState)
-                            )
-                            (Element.text (String.fromChar model.character))
+                        )
+                        (Element.text (String.fromChar model.character))
                     ]
-                , Element.text ("Countdown: " ++ String.fromInt model.countDown)
-                ]
-            , el [] <| optionsForm model
+                , el [Font.color textColorMain, centerX] <| Element.text ("Countdown: " ++ String.fromInt model.countDown)
+                ],
+              column [Element.width <| (fillPortion 3 |> maximum 400), Element.height fill, Background.color (rgb255 0 255 0)]
+                [el [centerY] <| 
+                    optionsForm model]
             ]
 
 
@@ -490,7 +485,7 @@ optionsForm model =
                      else
                         InduceRunning
                     )
-            , label =
+            , label = el [centerX] <|
                 Element.text <|
                     if model.running then
                         "Stop"
@@ -502,7 +497,7 @@ optionsForm model =
 
 
 
--- Helpers
+-- HELPERS
 
 
 extensionallyEqual : List a -> List a -> Bool
@@ -521,3 +516,17 @@ extensionallyEqual l1 l2 =
                 && extensionallyEqual
                     (List.filter notEqualX xs)
                     (List.filter notEqualX l2)
+
+
+elementAt : Int -> List a -> Maybe a
+elementAt index list =
+    case list of
+        x :: xs ->
+            if index == 0 then
+                Just x
+
+            else
+                elementAt (index - 1) xs
+
+        [] ->
+            Nothing
