@@ -429,7 +429,7 @@ textColorMain = (rgb255 200 200 200)
 
 counterDisplay: String -> Int -> Element Msg
 counterDisplay text counterValue = el 
-    [Font.color textColorMain] <|
+    [Font.color textColorMain, centerX] <|
     Element.text (text ++ ": " ++ String.fromInt counterValue)
 
 view : Model -> Html Msg
