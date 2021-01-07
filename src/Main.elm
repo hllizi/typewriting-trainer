@@ -445,7 +445,7 @@ view model =
                 , row [Element.width fill, Element.height fill]
                     [ el
                         (List.append
-                            [ centerX, centerY, Font.size 200, Font.color (rgb 200 230 10) ]
+                            [ centerX, centerY, Font.size 400, Font.color (rgb 200 230 10) ]
                             (coloring model.correctnessState)
                         )
                         (Element.text (String.fromChar model.character))
@@ -476,7 +476,7 @@ optionsForm : Model -> Element Msg
 optionsForm model =
     column []
         [ modeSelectButtons model
-        , Input.button []
+        , el [centerX] <| Input.button []
             { onPress =
                 Just
                     (if model.running then
@@ -485,8 +485,7 @@ optionsForm model =
                      else
                         InduceRunning
                     )
-            , label = el [centerX] <|
-                Element.text <|
+            , label = Element.text <|
                     if model.running then
                         "Stop"
 
