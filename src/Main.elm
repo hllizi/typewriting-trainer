@@ -70,7 +70,8 @@ type alias CharacterGroups =
 
 
 type Mode
-    = Middle
+    = Asdfjkloe 
+    | Middle
     | MiddleUpper
     | UpperToLower
     | LettersAndNumbers
@@ -86,6 +87,7 @@ type alias ModeData =
 modeToModeData : Mode -> ModeData
 modeToModeData mode =
     case mode of
+        Asdfjkloe -> {characters = asdfjkloe, id="asdfkloe", label="asdfkloe"}
         Middle ->
             { characters = middleRow, id = "middle", label = "middle" }
 
@@ -116,6 +118,11 @@ letters =
 lowerRow : List Char
 lowerRow =
     [ 'y', 'x', 'v', 'b', 'n', 'm' ]
+
+asdfjkloe: List Char
+asdfjkloe =
+    [ 'a', 's', 'd', 'f', 'j', 'k', 'l', 'ö' ]
+
 
 
 middleRow : List Char
@@ -193,7 +200,7 @@ setToRandomCharacter mode =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model Middle 1000 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
+    ( Model Middle 1500 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
 
 
 timeDifference : Time.Posix -> Time.Posix -> Int
@@ -452,7 +459,7 @@ view model =
                     ]
                 , el [Font.color textColorMain, centerX] <| Element.text ("Countdown: " ++ String.fromInt model.countDown)
                 ],
-              column [Element.width <| (fillPortion 3 |> maximum 400), Element.height fill, Background.color (rgb255 0 255 0)]
+              column [Element.width <| (fillPortion 3 |> maximum 400), Element.height fill, Background.color (rgb255 200 255 180)]
                 [el [centerY] <| 
                     optionsForm model]
             ]
@@ -468,7 +475,7 @@ modeSelectButtons model =
             , label = Input.labelAbove [] (Element.text "Modus wählen:")
             , options =
                 List.map (\mode -> Input.option mode (Element.text (modeToModeData mode).id))
-                    [ Middle, MiddleUpper, UpperToLower, LettersAndNumbers ]
+                    [ Asdfjkloe, Middle, MiddleUpper, UpperToLower, LettersAndNumbers ]
             }
 
 
