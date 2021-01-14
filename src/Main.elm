@@ -16,7 +16,7 @@ import Random
 import Task exposing (perform)
 import Time exposing (millisToPosix)
 
-
+main: Program () Model Msg
 main =
     Browser.element
         { init = init
