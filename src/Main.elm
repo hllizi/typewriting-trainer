@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Animation
 import Browser
 import Browser.Events exposing (onKeyPress)
 import Element exposing (..)
@@ -16,7 +17,8 @@ import Random
 import Task exposing (perform)
 import Time exposing (millisToPosix)
 
-main: Program () Model Msg
+
+main : Program () Model Msg
 main =
     Browser.element
         { init = init
@@ -40,6 +42,30 @@ type Msg
     | ToggleRunning
     | StartTime Time.Posix
     | CountDown Int
+    | Animate Animation.Msg
+    | SlideIn
+    | SlideOut
+
+
+type MenuState
+    = In
+    | Out
+
+invert: MenuState -> MenuState
+invert state = 
+    case state of 
+        In -> Out
+        Out -> In
+
+
+widthIn : Float 
+widthIn =
+    10
+
+
+widthOut : Float
+widthOut =
+    200
 
 
 type alias Model =
@@ -55,6 +81,8 @@ type alias Model =
     , correctnessState : CorrectnessState
     , running : Bool
     , countDown : Int
+    , style : Animation.State
+    , menuState : MenuState
     }
 
 
@@ -70,7 +98,7 @@ type alias CharacterGroups =
 
 
 type Mode
-    = Asdfjkloe 
+    = Asdfjkloe
     | Middle
     | MiddleUpper
     | UpperToLower
@@ -87,7 +115,9 @@ type alias ModeData =
 modeToModeData : Mode -> ModeData
 modeToModeData mode =
     case mode of
-        Asdfjkloe -> {characters = asdfjkloe, id="asdfkloe", label="asdfkloe"}
+        Asdfjkloe ->
+            { characters = asdfjkloe, id = "asdfkloe", label = "asdfkloe" }
+
         Middle ->
             { characters = middleRow, id = "middle", label = "middle" }
 
@@ -119,10 +149,10 @@ lowerRow : List Char
 lowerRow =
     [ 'y', 'x', 'v', 'b', 'n', 'm' ]
 
-asdfjkloe: List Char
+
+asdfjkloe : List Char
 asdfjkloe =
     [ 'a', 's', 'd', 'f', 'j', 'k', 'l', 'ö' ]
-
 
 
 middleRow : List Char
@@ -200,7 +230,7 @@ setToRandomCharacter mode =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model Middle 1500 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0, readTime LastUpdateTime )
+    ( Model Middle 1500 100 'A' 0 0 0 (millisToPosix 0) Nothing Neutral False 0 (Animation.style [ Animation.width (Animation.px widthIn) ]) In, readTime LastUpdateTime )
 
 
 timeDifference : Time.Posix -> Time.Posix -> Int
@@ -235,6 +265,15 @@ update msg model =
                     True
 
                 SetMode _ ->
+                    True
+
+                SlideIn ->
+                    True
+
+                SlideOut ->
+                    True
+
+                Animate _ ->
                     True
 
                 _ ->
@@ -306,6 +345,38 @@ update msg model =
             Pass ->
                 ( model, Cmd.none )
 
+            SlideIn ->
+                let
+                    changedStyle =
+                        Animation.interrupt
+                            [ Animation.to
+                                [ Animation.width <|
+                                    Animation.px
+                                            widthIn
+                                ]
+                            ]
+                            model.style
+                in
+                ( { model | style = changedStyle, menuState = In }, Cmd.none )
+
+            SlideOut ->
+                let
+                    changedStyle =
+                        Animation.interrupt
+                            [ Animation.to
+                                [ Animation.width <|
+                                    Animation.px
+                                            widthOut
+                                ]
+                            ]
+                            model.style
+                in
+                ( { model | style = changedStyle, menuState = Out }, Cmd.none )
+
+
+            Animate animMsg ->
+                ( { model | style = Animation.update animMsg model.style }, Cmd.none )
+
 
 resetCounters : Model -> Model
 resetCounters model =
@@ -353,6 +424,7 @@ subscriptions model =
             )
         , Time.every 100 (\_ -> ResetCorrectnessMarking)
         , onKeyPress (Json.Decode.map (checkCharacterCorrectness model << toMaybeChar) <| field "key" string)
+        , Animation.subscription Animate [ model.style ]
         ]
 
 
@@ -432,24 +504,30 @@ currentCharacter color char =
         Element.text <|
             String.fromChar char
 
-textColorMain = (rgb255 200 200 200)
 
-counterDisplay: String -> Int -> Element Msg
-counterDisplay text counterValue = el 
-    [Font.color textColorMain, centerX] <|
-    Element.text (text ++ ": " ++ String.fromInt counterValue)
+textColorMain =
+    rgb255 200 200 200
+
+
+counterDisplay : String -> Int -> Element Msg
+counterDisplay text counterValue =
+    el
+        [ Font.color textColorMain, centerX ]
+    <|
+        Element.text (text ++ ": " ++ String.fromInt counterValue)
+
 
 view : Model -> Html Msg
 view model =
-    layout [ Element.height fill] <|
-        row [Element.height fill, Element.width fill]
-            [ column [Element.height fill, Element.width <| fillPortion 20, Background.color (rgb255 0 0 100)]
-                [ row [Element.width fill]
-                    [ row [ Element.width fill ]  [counterDisplay "Fehler" model.mistakeCount]
-                    , row [ Element.width fill ]  [counterDisplay "Richtig" model.successCount]
-                    , row [ Element.width fill ]  [counterDisplay "Verpaßt" model.missedCount]
+    layout [ Element.height fill ] <|
+        row [ Element.height fill, Element.width fill ]
+            [ column [ Element.height fill, Element.width <| fillPortion 20, Background.color (rgb255 0 0 100) ]
+                [ row [ Element.width fill ]
+                    [ row [ Element.width fill ] [ counterDisplay "Fehler" model.mistakeCount ]
+                    , row [ Element.width fill ] [ counterDisplay "Richtig" model.successCount ]
+                    , row [ Element.width fill ] [ counterDisplay "Verpaßt" model.missedCount ]
                     ]
-                , row [Element.width fill, Element.height fill]
+                , row [ Element.width fill, Element.height fill ]
                     [ el
                         (List.append
                             [ centerX, centerY, Font.size 400, Font.color (rgb 200 230 10) ]
@@ -457,11 +535,14 @@ view model =
                         )
                         (Element.text (String.fromChar model.character))
                     ]
-                , el [Font.color textColorMain, centerX] <| Element.text ("Countdown: " ++ String.fromInt model.countDown)
-                ],
-              column [Element.width <| (fillPortion 3 |> maximum 400), Element.height fill, Background.color (rgb255 200 255 180)]
-                [el [centerY] <| 
-                    optionsForm model]
+                , el [ Font.color textColorMain, centerX ] <| Element.text ("Countdown: " ++ String.fromInt model.countDown)
+                ]
+            , column ( 
+                (List.map  Element.htmlAttribute <| Animation.render model.style) 
+                ++ [ Ev.onMouseEnter SlideOut, Ev.onMouseLeave SlideIn, Element.height fill, Background.color (rgb255 200 255 180) ])
+                [ el [ centerY ] <|
+                    optionsForm model
+                ]
             ]
 
 
@@ -483,22 +564,24 @@ optionsForm : Model -> Element Msg
 optionsForm model =
     column []
         [ modeSelectButtons model
-        , el [centerX] <| Input.button []
-            { onPress =
-                Just
-                    (if model.running then
-                        ToggleRunning
+        , el [ centerX ] <|
+            Input.button []
+                { onPress =
+                    Just
+                        (if model.running then
+                            ToggleRunning
 
-                     else
-                        InduceRunning
-                    )
-            , label = Element.text <|
-                    if model.running then
-                        "Stop"
+                         else
+                            InduceRunning
+                        )
+                , label =
+                    Element.text <|
+                        if model.running then
+                            "Stop"
 
-                    else
-                        "Start"
-            }
+                        else
+                            "Start"
+                }
         ]
 
 
